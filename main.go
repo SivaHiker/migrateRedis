@@ -5,10 +5,12 @@ import (
 	"github.com/go-redis/redis"
 	"sync"
 	"fmt"
+	"gopkg.in/mgo.v2/bson"
 )
 
 func main() {
 
+	var counter int64
 	session, err := mgo.Dial("10.15.0.145")
 	if err != nil {
 		panic(err)
@@ -17,19 +19,23 @@ func main() {
 
 	c := session.DB("userlist").C("newuserdata")
 
-	var results []UserInfo
+	var result UserInfo
 
-	err = c.Find(nil).All(&results)
-	if err != nil {
-		fmt.Println("Not able to get the records from the db",err)
+	//err = c.Find(nil).All(&results)
+	//if err != nil {
+	//	fmt.Println("Not able to get the records from the db",err)
+	//}
+
+	find := c.Find(bson.M{})
+	items := find.Iter()
+	for items.Next(&result) {
+		counter++
+		fmt.Println(result.UserData.UID)
+		fmt.Println(result.UserData.Msisdn)
+		GetRedisInstanceGCP().Set("um:"+result.UserData.UID,result.UserData.Msisdn,0)
+		fmt.Println("Migrated records till now --- >",counter)
 	}
 
-	for i := 0; i <=len(results);i++ {
-		fmt.Println(results[i].UserData.UID)
-		fmt.Println(results[i].UserData.Msisdn)
-		GetRedisInstanceGCP().Set("um:"+results[i].UserData.UID,results[i].UserData.Msisdn,0)
-		fmt.Println("Migrated records till now --- >",i)
-	}
 }
 
 
