@@ -43,9 +43,15 @@ func main() {
 		fmt.Println(resultSet.Status)
 		msisdnFilter := resultSet.Msisdn[0]
 		if(resultSet.Status==1 || resultSet.Status==2){
-			c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": false}})
+			erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": false}})
+			if(erro!=nil){
+				fmt.Println("Not able to update the record",msisdnFilter)
+			}
 		} else {
-			c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": true}})
+			erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": true}})
+			if(erro!=nil){
+				fmt.Println("Not able to update the record",msisdnFilter)
+			}
 		}
 		//GetRedisInstanceGCP().Set("um:"+result.UserData.UID,result.UserData.Msisdn,0)
 		fmt.Println("Migrated records till now --- >",counter)
