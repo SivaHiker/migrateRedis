@@ -11,6 +11,8 @@ import (
 func main() {
 
 	var counter int64
+	var activeCounter int64
+	var inactiveCounter int64
 	session, err := mgo.Dial("10.15.0.145")
 	if err != nil {
 		panic(err)
@@ -20,42 +22,53 @@ func main() {
 	c := session.DB("userlist").C("newuserdata")
 
 
-	fromsession, err := mgo.Dial("10.15.0.75")
-	if err != nil {
-		panic(err)
-	}
-	defer fromsession.Close()
+	//fromsession, err := mgo.Dial("10.15.0.75")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//defer fromsession.Close()
+	//
+	//c1 := fromsession.DB("userdb").C("users")
 
-	c1 := fromsession.DB("userdb").C("users")
-
-	//var result UserInfo
+	var result UserInfo
 
 	//err = c.Find(nil).All(&results)
 	//if err != nil {
 	//	fmt.Println("Not able to get the records from the db",err)
 	//}
-	var resultSet UserRecord
+	//var resultSet UserRecord
 
-	find := c1.Find(bson.M{})
+	find := c.Find(bson.M{})
 	items := find.Iter()
-	for items.Next(&resultSet) {
+	for items.Next(&result) {
 		counter++
-		fmt.Println(resultSet.Status)
-		msisdnFilter := resultSet.Msisdn[0]
-		if(resultSet.Status==1 || resultSet.Status==2){
-			erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": false}})
-			if(erro!=nil){
-				fmt.Println("Not able to update the record",msisdnFilter)
-			}
+		if(result.Active) {
+			GetRedisInstanceGCP().Set("um:"+result.UserData.UID, result.UserData.Msisdn, 0)
+			activeCounter++
 		} else {
-			erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": true}})
-			if(erro!=nil){
-				fmt.Println("Not able to update the record",msisdnFilter)
-			}
+			GetRedisInstanceGCP().Set("ud:"+result.UserData.UID, result.UserData.Msisdn, 0)
+			GetRedisInstanceGCP().Set("md:"+result.UserData.Msisdn,result.UserData.UID , 0)
+			inactiveCounter++
 		}
+
+		//fmt.Println(resultSet.Status)
+		//msisdnFilter := resultSet.Msisdn[0]
+		//if(resultSet.Status==1 || resultSet.Status==2){
+		//	erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": false}})
+		//	if(erro!=nil){
+		//		fmt.Println("Not able to update the record",msisdnFilter)
+		//	}
+		//} else {
+		//	erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": true}})
+		//	if(erro!=nil){
+		//		fmt.Println("Not able to update the record",msisdnFilter)
+		//	}
+		//}
 		//GetRedisInstanceGCP().Set("um:"+result.UserData.UID,result.UserData.Msisdn,0)
 		fmt.Println("Migrated records till now --- >",counter)
 	}
+	fmt.Println("Total Active User records  --- >",activeCounter)
+	fmt.Println("Total InActive User records  --- >",inactiveCounter)
 
 }
 
@@ -85,6 +98,7 @@ func GetRedisInstanceGCP() *redis.Client {
 type UserInfo struct {
 	UserData UserData `json:"UserData"`
 	Flag bool `json:"flag"`
+	Active bool `json:"active"`
 }
 
 type UserData struct {
