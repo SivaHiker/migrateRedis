@@ -6,13 +6,20 @@ import (
 	"sync"
 	"fmt"
 	//"gopkg.in/mgo.v2/bson"
+	"gopkg.in/mgo.v2/bson"
 )
+
+var jobs chan UserInfo
+var done chan bool
+var counter int64
+var activeCounter int64
+var inactiveCounter int64
 
 func main() {
 
-	var counter int64
-	var activeCounter int64
-	var inactiveCounter int64
+	jobs = make(chan UserInfo, 10000)
+	done = make(chan bool, 1)
+
 	session, err := mgo.Dial("10.15.0.145")
 	if err != nil {
 		panic(err)
@@ -30,50 +37,67 @@ func main() {
 	//
 	//c1 := fromsession.DB("userdb").C("users")
 
-	var result []UserInfo
-
-	err = c.Find(nil).All(&result)
-	if err != nil {
-		fmt.Println("Not able to get the records from the db",err)
+	var result UserInfo
+	for w := 1; w <= 100; w++ {
+		go workerPool()
 	}
+
+	//err = c.Find(nil).All(&result)
+	//if err != nil {
+	//	fmt.Println("Not able to get the records from the db",err)
+	//}
 	//var resultSet UserRecord
 
-	//find := c.Find(bson.M{})
-	//items := find.Iter()
-	//for items.Next(&result) {
-	fmt.Println("Results count",len(result))
-	for i:=0;i<len(result);i++ {
-		counter++
-		if(result[i].Active) {
-			GetRedisInstanceGCP().Set("um:"+result[i].UserData.UID, result[i].UserData.Msisdn, 0)
-			activeCounter++
-		} else {
-			GetRedisInstanceGCP().Set("ud:"+result[i].UserData.UID, result[i].UserData.Msisdn, 0)
-			GetRedisInstanceGCP().Set("md:"+result[i].UserData.Msisdn,result[i].UserData.UID , 0)
-			inactiveCounter++
+	//for w := 1; w <= 50; w++ {
+	//	go worker()
+	//}
+
+	find := c.Find(bson.M{})
+	items := find.Iter()
+	for items.Next(&result) {
+			jobs <- result
+			//fmt.Println(resultSet.Status)
+			//msisdnFilter := resultSet.Msisdn[0]
+			//if(resultSet.Status==1 || resultSet.Status==2){
+			//	erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": false}})
+			//	if(erro!=nil){
+			//		fmt.Println("Not able to update the record",msisdnFilter)
+			//	}
+			//} else {
+			//	erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": true}})
+			//	if(erro!=nil){
+			//		fmt.Println("Not able to update the record",msisdnFilter)
+			//	}
+			//}
+			//GetRedisInstanceGCP().Set("um:"+result.UserData.UID,result.UserData.Msisdn,0)
+
 		}
-
-		//fmt.Println(resultSet.Status)
-		//msisdnFilter := resultSet.Msisdn[0]
-		//if(resultSet.Status==1 || resultSet.Status==2){
-		//	erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": false}})
-		//	if(erro!=nil){
-		//		fmt.Println("Not able to update the record",msisdnFilter)
-		//	}
-		//} else {
-		//	erro:=c.Update(bson.M{"userdata.msisdn": msisdnFilter}, bson.M{"$set": bson.M{"active": true}})
-		//	if(erro!=nil){
-		//		fmt.Println("Not able to update the record",msisdnFilter)
-		//	}
-		//}
-		//GetRedisInstanceGCP().Set("um:"+result.UserData.UID,result.UserData.Msisdn,0)
-		fmt.Println("Migrated records till now --- >",counter)
-	}
-	fmt.Println("Total Active User records  --- >",activeCounter)
-	fmt.Println("Total InActive User records  --- >",inactiveCounter)
-
+		fmt.Println("Total Active User records  --- >", activeCounter)
+		fmt.Println("Total InActive User records  --- >", inactiveCounter)
+	    <-done
 }
 
+func workerPool() {
+	for (true) {
+		select {
+		case msg,ok := <-jobs:
+			if ok {
+				if (msg.Active) {
+					GetRedisInstanceGCP().Set("um:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
+					activeCounter++
+				} else {
+					GetRedisInstanceGCP().Set("ud:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
+					GetRedisInstanceGCP().Set("md:"+msg.UserData.Msisdn, msg.UserData.UID, 0)
+					inactiveCounter++
+				}
+				fmt.Println("Migrated records till now --- >", counter)
+			} else {
+				done <- true
+			}
+		}
+	}
+
+}
 
 func GetRedisInstanceGCP() *redis.Client {
 	var onceGCP sync.Once
