@@ -5,7 +5,7 @@ import (
 	"github.com/go-redis/redis"
 	"sync"
 	"fmt"
-	"gopkg.in/mgo.v2/bson"
+	//"gopkg.in/mgo.v2/bson"
 )
 
 func main() {
@@ -30,25 +30,26 @@ func main() {
 	//
 	//c1 := fromsession.DB("userdb").C("users")
 
-	var result UserInfo
+	var result []UserInfo
 
-	//err = c.Find(nil).All(&results)
-	//if err != nil {
-	//	fmt.Println("Not able to get the records from the db",err)
-	//}
+	err = c.Find(nil).All(&result)
+	if err != nil {
+		fmt.Println("Not able to get the records from the db",err)
+	}
 	//var resultSet UserRecord
 
-	find := c.Find(bson.M{})
-	items := find.Iter()
-	for items.Next(&result) {
+	//find := c.Find(bson.M{})
+	//items := find.Iter()
+	//for items.Next(&result) {
+	fmt.Println("Results count",len(result))
+	for i:=0;i<len(result);i++ {
 		counter++
-		fmt.Println(result.UserData.Msisdn)
-		if(result.Active) {
-			GetRedisInstanceGCP().Set("um:"+result.UserData.UID, result.UserData.Msisdn, 0)
+		if(result[i].Active) {
+			GetRedisInstanceGCP().Set("um:"+result[i].UserData.UID, result[i].UserData.Msisdn, 0)
 			activeCounter++
 		} else {
-			GetRedisInstanceGCP().Set("ud:"+result.UserData.UID, result.UserData.Msisdn, 0)
-			GetRedisInstanceGCP().Set("md:"+result.UserData.Msisdn,result.UserData.UID , 0)
+			GetRedisInstanceGCP().Set("ud:"+result[i].UserData.UID, result[i].UserData.Msisdn, 0)
+			GetRedisInstanceGCP().Set("md:"+result[i].UserData.Msisdn,result[i].UserData.UID , 0)
 			inactiveCounter++
 		}
 
