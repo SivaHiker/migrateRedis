@@ -90,6 +90,7 @@ func workerPool() {
 					GetRedisInstanceGCP().Set("md:"+msg.UserData.Msisdn, msg.UserData.UID, 0)
 					inactiveCounter++
 				}
+				counter++
 				fmt.Println("Migrated records till now --- >", counter)
 			} else {
 				done <- true
