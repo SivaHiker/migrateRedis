@@ -42,6 +42,7 @@ func main() {
 	items := find.Iter()
 	for items.Next(&result) {
 		counter++
+		fmt.Println(result.UserData.Msisdn)
 		if(result.Active) {
 			GetRedisInstanceGCP().Set("um:"+result.UserData.UID, result.UserData.Msisdn, 0)
 			activeCounter++
