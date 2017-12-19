@@ -14,6 +14,7 @@ var done chan bool
 var counter int64
 var activeCounter int64
 var inactiveCounter int64
+var redisclient *redis.Client
 
 func main() {
 
@@ -28,6 +29,7 @@ func main() {
 
 	c := session.DB("userlist").C("newuserdata")
 
+	redisclient = GetRedisInstanceGCP()
 
 	//fromsession, err := mgo.Dial("10.15.0.75")
 	//if err != nil {
@@ -38,7 +40,7 @@ func main() {
 	//c1 := fromsession.DB("userdb").C("users")
 
 	var result UserInfo
-	for w := 1; w <= 100; w++ {
+	for w := 1; w <= 1000; w++ {
 		go workerPool()
 	}
 
@@ -83,11 +85,11 @@ func workerPool() {
 		case msg,ok := <-jobs:
 			if ok {
 				if (msg.Active) {
-					GetRedisInstanceGCP().Set("um:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
+					redisclient.Set("um:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
 					activeCounter++
 				} else {
-					GetRedisInstanceGCP().Set("ud:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
-					GetRedisInstanceGCP().Set("md:"+msg.UserData.Msisdn, msg.UserData.UID, 0)
+					redisclient.Set("ud:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
+					redisclient.Set("md:"+msg.UserData.Msisdn, msg.UserData.UID, 0)
 					inactiveCounter++
 				}
 				counter++
