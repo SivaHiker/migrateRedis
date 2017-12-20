@@ -5,7 +5,6 @@ import (
 	"github.com/go-redis/redis"
 	"sync"
 	"fmt"
-	//"gopkg.in/mgo.v2/bson"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -14,7 +13,6 @@ var done chan bool
 var counter int64
 var activeCounter int64
 var inactiveCounter int64
-var redisclient *redis.Client
 
 func main() {
 
@@ -29,7 +27,7 @@ func main() {
 
 	c := session.DB("userlist").C("newuserdata")
 
-	redisclient = GetRedisInstanceGCP()
+	//redisclient = GetRedisInstanceGCP()
 
 	//fromsession, err := mgo.Dial("10.15.0.75")
 	//if err != nil {
@@ -40,7 +38,7 @@ func main() {
 	//c1 := fromsession.DB("userdb").C("users")
 
 	var result UserInfo
-	for w := 1; w <= 1000; w++ {
+	for w := 1; w <= 100; w++ {
 		go workerPool()
 	}
 
@@ -83,20 +81,23 @@ func workerPool() {
 	for (true) {
 		select {
 		case msg,ok := <-jobs:
+			rClient :=GetRedisInstanceGCP()
 			if ok {
 				if (msg.Active) {
-					redisclient.Set("um:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
+					rClient.Set("um:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
+
 					activeCounter++
 				} else {
-					redisclient.Set("ud:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
-					redisclient.Set("md:"+msg.UserData.Msisdn, msg.UserData.UID, 0)
+					rClient.Set("ud:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
+					rClient.Set("md:"+msg.UserData.Msisdn, msg.UserData.UID, 0)
 					inactiveCounter++
 				}
+				rClient.Close()
 				counter++
 				fmt.Println("Migrated records till now --- >", counter)
-			} else {
-				done <- true
 			}
+		 case <-done:
+             done<-true
 		}
 	}
 
@@ -108,15 +109,14 @@ func GetRedisInstanceGCP() *redis.Client {
 	onceGCP.Do(func() {
 		client := redis.NewClient(&redis.Options{
 			Addr:     "redis-13065.c2.asia-southeast-1-1.gce.cloud.redislabs.com:13065",
-			//Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 			PoolSize: 100,
 			/*
-					PoolTimeout:  10 * time.Minute,
-					IdleTimeout:  5 * time.Minute,
-					ReadTimeout:  2 * time.Second,
-					WriteTimeout: 10 * time.Second,
+				PoolTimeout:  10 * time.Minute,
+				IdleTimeout:  5 * time.Minute,
+				ReadTimeout:  2 * time.Second,
+				WriteTimeout: 10 * time.Second,
 			*/
 		})
 		instanceGCP = client
