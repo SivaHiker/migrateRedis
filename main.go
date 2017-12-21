@@ -2,8 +2,8 @@ package main
 
 import (
 	"gopkg.in/mgo.v2"
-	"github.com/go-redis/redis"
-	"sync"
+	//"github.com/go-redis/redis"
+	"github.com/garyburd/redigo/redis"
 	"fmt"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -13,6 +13,8 @@ var done chan bool
 var counter int64
 var activeCounter int64
 var inactiveCounter int64
+//var rClient *redis.Client
+var pool *redis.Pool
 
 func main() {
 
@@ -27,7 +29,14 @@ func main() {
 
 	c := session.DB("userlist").C("newuserdata")
 
-	//redisclient = GetRedisInstanceGCP()
+	//rClient =GetRedisInstanceGCP()
+
+	pool = &redis.Pool{
+		MaxIdle: 500,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", "redis-13065.c2.asia-southeast-1-1.gce.cloud.redislabs.com:13065")
+		},
+	}
 
 	//fromsession, err := mgo.Dial("10.15.0.75")
 	//if err != nil {
@@ -38,7 +47,7 @@ func main() {
 	//c1 := fromsession.DB("userdb").C("users")
 
 	var result UserInfo
-	for w := 1; w <= 100; w++ {
+	for w := 1; w <= 500; w++ {
 		go workerPool()
 	}
 
@@ -81,18 +90,26 @@ func workerPool() {
 	for (true) {
 		select {
 		case msg,ok := <-jobs:
-			rClient :=GetRedisInstanceGCP()
 			if ok {
+				conn := pool.Get()
 				if (msg.Active) {
-					rClient.Set("um:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
-
+					_,err :=conn.Do("SET","um:"+msg.UserData.UID, msg.UserData.Msisdn)
+					if(err!=nil){
+						fmt.Println("Active Record not updated ========>",err)
+					}
 					activeCounter++
 				} else {
-					rClient.Set("ud:"+msg.UserData.UID, msg.UserData.Msisdn, 0)
-					rClient.Set("md:"+msg.UserData.Msisdn, msg.UserData.UID, 0)
+					_,err := conn.Do("SET","ud:"+msg.UserData.UID, msg.UserData.Msisdn)
+					if(err!=nil){
+						fmt.Println("Inactive Record not updated ========>",err)
+					}
+					_,err1 := conn.Do("SET","md:"+msg.UserData.Msisdn, msg.UserData.UID)
+					if(err1!=nil){
+						fmt.Println("Inactive Record not updated ========>",err1)
+					}
 					inactiveCounter++
 				}
-				rClient.Close()
+				conn.Close()
 				counter++
 				fmt.Println("Migrated records till now --- >", counter)
 			}
@@ -103,26 +120,26 @@ func workerPool() {
 
 }
 
-func GetRedisInstanceGCP() *redis.Client {
-	var onceGCP sync.Once
-	var instanceGCP *redis.Client
-	onceGCP.Do(func() {
-		client := redis.NewClient(&redis.Options{
-			Addr:     "redis-13065.c2.asia-southeast-1-1.gce.cloud.redislabs.com:13065",
-			Password: "",
-			DB:       0,
-			PoolSize: 100,
-			/*
-				PoolTimeout:  10 * time.Minute,
-				IdleTimeout:  5 * time.Minute,
-				ReadTimeout:  2 * time.Second,
-				WriteTimeout: 10 * time.Second,
-			*/
-		})
-		instanceGCP = client
-	})
-	return instanceGCP
-}
+//func GetRedisInstanceGCP() *redis.Client {
+//	var onceGCP sync.Once
+//	var instanceGCP *redis.Client
+//	onceGCP.Do(func() {
+//		client := redis.NewClient(&redis.Options{
+//			Addr:     "redis-13065.c2.asia-southeast-1-1.gce.cloud.redislabs.com:13065",
+//			Password: "",
+//			DB:       0,
+//			PoolSize: 100,
+//			/*
+//				PoolTimeout:  10 * time.Minute,
+//				IdleTimeout:  5 * time.Minute,
+//				ReadTimeout:  2 * time.Second,
+//				WriteTimeout: 10 * time.Second,
+//			*/
+//		})
+//		instanceGCP = client
+//	})
+//	return instanceGCP
+//}
 
 type UserInfo struct {
 	UserData UserData `json:"UserData"`
